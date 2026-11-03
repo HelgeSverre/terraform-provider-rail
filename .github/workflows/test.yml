@@ -1,0 +1,67 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, vet, docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - run: go build ./...
+      - run: go vet ./...
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Docs are up to date
+        run: |
+          go generate ./...
+          git diff --exit-code -- docs
+      - run: go test ./...
+
+  acceptance:
+    name: Acceptance (Terraform ${{ matrix.terraform }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        terraform: ["1.12.*", "1.17.*"]
+    services:
+      # A single RAIL tier. postman-echo and httpbin.dev mint links locally, so no vendor
+      # API is called; the trace data source still follows their redirects.
+      rail:
+        image: ghcr.io/helgesverre/rail-rs:0.2.0
+        ports: ["8080:8080"]
+        env:
+          RAIL_NAME: acceptance
+          RAIL_PUBLIC_URL: http://localhost:8080
+          RAIL_UPSTREAMS: postman-echo,httpbin.dev
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - run: go test ./... -v -count=1
+        env:
+          TF_ACC: "1"
+          RAIL_ENDPOINT: http://localhost:8080
