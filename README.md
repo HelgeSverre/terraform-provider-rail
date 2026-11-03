@@ -136,8 +136,8 @@ This is the only correct behavior for printed collateral, which cannot be recall
 
 ## Installation
 
-The provider is published under `helgesverre/rail`. To build it from source and use it without the
-registry:
+The provider is not on the Terraform Registry. Build it from source and point Terraform at it; the
+`helgesverre/rail` source address in the examples resolves through the override:
 
 ```sh
 go install github.com/HelgeSverre/terraform-provider-rail@latest
